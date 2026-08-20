@@ -39,7 +39,7 @@ header{position:sticky;top:0;z-index:40;background:linear-gradient(to bottom,var
 .datechip{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
 .wave{margin-top:10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;display:flex;align-items:center;gap:12px;}
 .wave-notches{display:flex;gap:5px;flex:0 0 auto}
-.notch{width:26px;height:8px;border-radius:4px;background:var(--raised);transition:background .25s}
+.notch{width:15px;height:8px;border-radius:4px;background:var(--raised);transition:background .25s}
 .notch.on{background:var(--accent)}
 .notch.deload.on{background:var(--teal)}
 .wave-text{flex:1;min-width:0}
@@ -138,6 +138,20 @@ nav.bottom{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(0,0
 .save-log:active{transform:scale(.95)}
 .lastlog{font-size:11.5px;color:var(--faint);margin-top:7px;font-variant-numeric:tabular-nums}
 .lastlog b{color:var(--teal);font-weight:600}
+/* weeks 5–12 load-targets card */
+.prog{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:6px 14px;margin-bottom:12px}
+.prog summary{cursor:pointer;font-family:var(--display);font-weight:700;font-size:14px;min-height:44px;display:flex;align-items:center;list-style:none}
+.prog summary::-webkit-details-marker{display:none}
+.prog[open] summary{border-bottom:1px solid var(--line)}
+.prog-twrap{overflow-x:auto}
+.prog-t{width:100%;border-collapse:collapse;font-size:12.5px}
+.prog-t th,.prog-t td{padding:7px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+.prog-t th{color:var(--faint);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;text-align:right}
+.prog-t th:first-child{text-align:left}
+.prog-t td{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.prog-t td:first-child{text-align:left;font-weight:600;color:var(--ink);white-space:normal}
+.prog-t td:last-child{color:var(--accent);font-weight:700}
+.prog-t tr:last-child td{border-bottom:none}
 /* warm-up card */
 .wu-card{padding:12px 14px}
 .wu-card.done{border-color:var(--teal)}
@@ -391,6 +405,7 @@ details.rule p{font-size:13px;color:var(--muted);padding-top:4px;line-height:1.5
       <div class="day-scroll" id="dayScroll"></div>
       <div class="sess-head"><h3 id="sessTitle"></h3><span class="chip plain" id="sessMeta"></span></div>
       <p class="mut" id="sessNote" style="margin-bottom:12px"></p>
+      <div id="progCard"></div>
       <div id="warmupCard"></div>
       <div id="exList"></div>
     </div>
@@ -580,7 +595,7 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* ===== access gate (light client-side lock — not real security) ===== */
-const AUTH_HASH='d0cf2b20ad01fcba2b533f88d685e7998d5d4c2ea780028208d4a7491b9ecf91'; // sha256('steph:steph2026')
+const AUTH_HASH='535f6015c0910b8a5b1653254d64188d26bae48d53d7565164c751b0d6ed777f'; // sha256('tepha:0211408080nz')
 async function sha256(str){const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');}
 (function initGate(){
  const gate=document.getElementById('authGate');if(!gate)return;
@@ -604,12 +619,41 @@ let toastT=null;
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2400);}
 
 /* ===== training data ===== */
+// 8-week block (weeks 5–12): two 4-week waves, deload at wk 8 & wk 12
 const WEEKS=[
- {t:'Week 1 · Baseline',r:'Find working weights — bottom of each rep range, ~2 RIR, clean reps.'},
- {t:'Week 2 · Add reps',r:'Same weights, +1–2 reps per set. Climb toward the top of each range.'},
- {t:'Week 3 · Add load',r:'Hit the top of a range on all sets? Add 1–2.5 kg upper / 2.5–5 kg lower, restart at bottom. Push hardest.'},
- {t:'Week 4 · Deload',r:'Half the sets, moderate weight, everything 3+ RIR. Recover joints — you lose nothing.',deload:true}
+ {t:'Wk 5 · Baseline',r:'Re-set to your new starting loads (see Load targets) — bottom of each range, ~2 RIR, clean reps.'},
+ {t:'Wk 6 · Add reps',r:'Same loads, +1–2 reps per set. Climb toward the top of each range.'},
+ {t:'Wk 7 · Add load',r:'Top of the range on all sets? Add 1–2.5 kg upper / 2.5–5 kg lower, restart at the bottom. Push hardest.'},
+ {t:'Wk 8 · Deload',r:'Half the sets, moderate load, everything 3+ RIR. Recover joints — you keep your gains.',deload:true},
+ {t:'Wk 9 · Baseline+',r:'Settle the new heavier loads at ~2 RIR — aim above where Wave A started.'},
+ {t:'Wk 10 · Add reps',r:'Same loads, climb the rep ranges again.'},
+ {t:'Wk 11 · Add load',r:'Final push — add load toward your Week-12 goals.'},
+ {t:'Wk 12 · Deload + check-in',r:'Lighter week. Then log weight, measurements & photos and send your export — time to re-plan.',deload:true}
 ];
+/* Weeks 5–12 load targets (from your week 1→4 progression) */
+const PROG=[
+ {n:'Barbell hip thrust',reps:'5–8',s:'100 kg',g:'110 kg'},
+ {n:'RDL',reps:'6–10',s:'50 kg',g:'60 kg'},
+ {n:'Leg press · pain-free',reps:'10–12',s:'90 kg',g:'105 kg'},
+ {n:'Seated ham curl',reps:'10–12',s:'55 kg',g:'60 kg'},
+ {n:'Lat pulldown',reps:'8–12',s:'55 kg',g:'65 kg'},
+ {n:'Chest-supported / seated row',reps:'8–12',s:'52.5 kg',g:'60 kg'},
+ {n:'Overhead press',reps:'8–10',s:'17.5 kg',g:'22.5 kg'},
+ {n:'Single-leg hip thrust',reps:'8–12',s:'25 kg',g:'30 kg'},
+ {n:'DB / B-stance RDL',reps:'10–12',s:'25 kg',g:'30 kg'},
+ {n:'45° back extension',reps:'12–15',s:'25 kg',g:'30 kg'},
+ {n:'Standing calf raise',reps:'10–15',s:'12.5 kg',g:'20 kg'},
+ {n:'Hip abduction',reps:'15–20',s:'80 kg',g:'90 kg'}
+];
+function renderProg(){
+ const el=document.getElementById('progCard');if(!el)return;
+ const rows=PROG.map(p=>'<tr><td>'+esc(p.n)+'</td><td>'+esc(p.reps)+'</td><td>'+esc(p.s)+'</td><td>'+esc(p.g)+'</td></tr>').join('');
+ el.innerHTML='<details class="prog"><summary>📈 Weeks 5–12 · Load targets</summary>'+
+  '<p class="mut" style="font-size:12.5px;margin:8px 0 10px">Two 4-week waves. <b style="color:var(--ink)">Add load</b> on Wk 7 & Wk 11, <b style="color:var(--ink)">deload</b> on Wk 8 & Wk 12. Rule: top of the rep range on all sets at target RIR → add the small load, restart at the bottom.</p>'+
+  '<div class="prog-twrap"><table class="prog-t"><thead><tr><th>Lift</th><th>Reps</th><th>Wk 5</th><th>Wk 12</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+  '<p class="mut" style="font-size:12px;margin-top:10px">Pull-ups & dips: cut the assistance each load week → your first unassisted rep. Bench/press & everything else: add reps first, then a small load. Clear the big jumps (e.g. 100 kg hip thrust) with your knee clinician.</p>'+
+  '</details>';
+}
 // grp = swap group key
 const SESSIONS={
  mon:{name:'Lower A · Glute strength',meta:'~55 min',note:'Warm-up first. Hip thrust is the anchor — this is your strength day.',ex:[
@@ -847,6 +891,8 @@ const SUPPS=[
  {n:'"Anti-cellulite" anything',d:'No supplement reduces cellulite',e:'Skip',c:'red'}
 ];
 const RULES=[
+ {col:'#57BCA6',ic:'v',h:'Add greens every main meal.',t:'A fist of veg at lunch AND dinner — weeks 1–4 ran low on fibre. Aim 30–40 g/day; keep berries at breakfast.'},
+ {col:'#E5A54B',ic:'!',h:'Ease off the daily cheddar.',t:'It stacks saturated fat + dairy. On days you already have cottage cheese, swap cheddar for egg whites or edamame.'},
  {col:'#E05252',ic:'x',h:'Kiwi — never.',t:'Allergy. Watch for tingling with banana/avocado/melon (same family).'},
  {col:'#E5A54B',ic:'!',h:'Less dairy?',t:'Swap cottage cheese → eggs/tofu/edamame; Greek yogurt → soy or extra fish/meat. Protect the protein total.'},
  {col:'#57BCA6',ic:'v',h:'Cheat meal stays.',t:'One meal a week, not a day. Adherence tool — enjoy it, don\'t chase it.'},
@@ -958,11 +1004,11 @@ const MEAL_SECTIONS=['Breakfast','Lunch','Pre-workout','Post-workout','Dinner','
 function renderWave(){
  const w=store.get('week',1);
  const wn=$('#waveNotches');wn.innerHTML='';
- for(let i=1;i<=4;i++){const n=document.createElement('div');n.className='notch'+(i===4?' deload':'')+(i<=w?' on':'');wn.appendChild(n);}
+ for(let i=1;i<=WEEKS.length;i++){const n=document.createElement('div');n.className='notch'+(WEEKS[i-1].deload?' deload':'')+(i<=w?' on':'');wn.appendChild(n);}
  $('#waveTitle').textContent=WEEKS[w-1].t;
  $('#waveRule').textContent=WEEKS[w-1].r;
 }
-$('#waveNext').addEventListener('click',()=>{const w=store.get('week',1)%4+1;store.set('week',w);renderWave();renderToday();toast(w===4?'Deload week — recover, you lose nothing':'Now on '+WEEKS[w-1].t);});
+$('#waveNext').addEventListener('click',()=>{const w=store.get('week',1)%WEEKS.length+1;store.set('week',w);renderWave();renderToday();toast(WEEKS[w-1].deload?'Deload week — recover, you keep your gains':'Now on '+WEEKS[w-1].t);});
 $('#dateChip').textContent=new Date().toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
 
 /* ===== nav ===== */
@@ -1445,7 +1491,11 @@ $('#mSave').addEventListener('click',()=>{const w=$('#mWaist').value,h=$('#mHip'
 /* ===== lock zoom (iOS ignores user-scalable=no; touch-action covers the rest) ===== */
 ['gesturestart','gesturechange','gestureend'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),{passive:false}));
 
+/* ===== new-block migration: start the weeks 5–12 block at Wk 5 (once) ===== */
+if(store.get('block')!=='w5-12'){store.set('week',1);store.set('block','w5-12');}
+
 /* ===== init ===== */
+renderProg();
 renderWave();renderToday();renderSession();renderLog();renderTrack();
 go(curPage);
 </script>
