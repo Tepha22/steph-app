@@ -138,7 +138,7 @@ nav.bottom{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(0,0
 .save-log:active{transform:scale(.95)}
 .lastlog{font-size:11.5px;color:var(--faint);margin-top:7px;font-variant-numeric:tabular-nums}
 .lastlog b{color:var(--teal);font-weight:600}
-/* weeks 5–12 load-targets card */
+/* weeks 5–13 load-targets card */
 .prog{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:6px 14px;margin-bottom:12px}
 .prog summary{cursor:pointer;font-family:var(--display);font-weight:700;font-size:14px;min-height:44px;display:flex;align-items:center;list-style:none}
 .prog summary::-webkit-details-marker{display:none}
@@ -152,6 +152,14 @@ nav.bottom{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(0,0
 .prog-t td:first-child{text-align:left;font-weight:600;color:var(--ink);white-space:normal}
 .prog-t td:last-child{color:var(--accent);font-weight:700}
 .prog-t tr:last-child td{border-bottom:none}
+/* per-exercise weekly target */
+.wk-target{margin-top:9px;padding:8px 11px;border-radius:10px;background:var(--accent-soft);border:1px solid var(--accent);font-size:12.5px;color:var(--muted);line-height:1.45}
+.wk-target .t{color:var(--accent);font-weight:800}
+.wk-target .l{color:var(--ink);font-weight:800;font-variant-numeric:tabular-nums}
+.wk-target .up{color:var(--accent);font-weight:700}
+.wk-target .dn{color:var(--faint)}
+.wk-target.deload{background:var(--amber-soft);border-color:var(--amber)}
+.wk-target.deload .t{color:var(--amber)}
 /* warm-up card */
 .wu-card{padding:12px 14px}
 .wu-card.done{border-color:var(--teal)}
@@ -619,40 +627,91 @@ let toastT=null;
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2400);}
 
 /* ===== training data ===== */
-// 8-week block (weeks 5–12): two 4-week waves, deload at wk 8 & wk 12
+// 9-week block (weeks 5–13, ~2 months): deload at wk 8 & wk 13, check-in after wk 13
 const WEEKS=[
  {t:'Wk 5 · Baseline',r:'Re-set to your new starting loads (see Load targets) — bottom of each range, ~2 RIR, clean reps.'},
  {t:'Wk 6 · Add reps',r:'Same loads, +1–2 reps per set. Climb toward the top of each range.'},
- {t:'Wk 7 · Add load',r:'Top of the range on all sets? Add 1–2.5 kg upper / 2.5–5 kg lower, restart at the bottom. Push hardest.'},
+ {t:'Wk 7 · Add load',r:'Top of the range on all sets? Add the small load, restart at the bottom. Push hardest.'},
  {t:'Wk 8 · Deload',r:'Half the sets, moderate load, everything 3+ RIR. Recover joints — you keep your gains.',deload:true},
- {t:'Wk 9 · Baseline+',r:'Settle the new heavier loads at ~2 RIR — aim above where Wave A started.'},
+ {t:'Wk 9 · Baseline+',r:'Settle the new heavier loads at ~2 RIR — build from where Wk 7 left off.'},
  {t:'Wk 10 · Add reps',r:'Same loads, climb the rep ranges again.'},
- {t:'Wk 11 · Add load',r:'Final push — add load toward your Week-12 goals.'},
- {t:'Wk 12 · Deload + check-in',r:'Lighter week. Then log weight, measurements & photos and send your export — time to re-plan.',deload:true}
+ {t:'Wk 11 · Add load',r:'Add load toward your peak numbers.'},
+ {t:'Wk 12 · Rep peak',r:'Hold the peak load — squeeze out every rep at the top of the range.'},
+ {t:'Wk 13 · Deload + check-in',r:'Lighter week. Then log weight, measurements & photos and send your export — time to re-plan.',deload:true}
 ];
-/* Weeks 5–12 load targets (from your week 1→4 progression) */
+/* Weeks 5–13 load targets (start → peak, from your week 1→4 progression) */
 const PROG=[
  {n:'Barbell hip thrust',reps:'5–8',s:'100 kg',g:'110 kg'},
- {n:'RDL',reps:'6–10',s:'50 kg',g:'60 kg'},
+ {n:'RDL',reps:'6–10',s:'47.5 kg',g:'52.5 kg'},
  {n:'Leg press · pain-free',reps:'10–12',s:'90 kg',g:'105 kg'},
  {n:'Seated ham curl',reps:'10–12',s:'55 kg',g:'60 kg'},
  {n:'Lat pulldown',reps:'8–12',s:'55 kg',g:'65 kg'},
- {n:'Chest-supported / seated row',reps:'8–12',s:'52.5 kg',g:'60 kg'},
+ {n:'Chest-supported / seated row',reps:'8–12',s:'55 kg',g:'60 kg'},
  {n:'Overhead press',reps:'8–10',s:'17.5 kg',g:'22.5 kg'},
  {n:'Single-leg hip thrust',reps:'8–12',s:'25 kg',g:'30 kg'},
  {n:'DB / B-stance RDL',reps:'10–12',s:'25 kg',g:'30 kg'},
  {n:'45° back extension',reps:'12–15',s:'25 kg',g:'30 kg'},
- {n:'Standing calf raise',reps:'10–15',s:'12.5 kg',g:'20 kg'},
+ {n:'Standing calf raise',reps:'10–15',s:'12.5 kg',g:'17.5 kg'},
  {n:'Hip abduction',reps:'15–20',s:'80 kg',g:'90 kg'}
 ];
 function renderProg(){
  const el=document.getElementById('progCard');if(!el)return;
  const rows=PROG.map(p=>'<tr><td>'+esc(p.n)+'</td><td>'+esc(p.reps)+'</td><td>'+esc(p.s)+'</td><td>'+esc(p.g)+'</td></tr>').join('');
- el.innerHTML='<details class="prog"><summary>📈 Weeks 5–12 · Load targets</summary>'+
-  '<p class="mut" style="font-size:12.5px;margin:8px 0 10px">Two 4-week waves. <b style="color:var(--ink)">Add load</b> on Wk 7 & Wk 11, <b style="color:var(--ink)">deload</b> on Wk 8 & Wk 12. Rule: top of the rep range on all sets at target RIR → add the small load, restart at the bottom.</p>'+
-  '<div class="prog-twrap"><table class="prog-t"><thead><tr><th>Lift</th><th>Reps</th><th>Wk 5</th><th>Wk 12</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+ el.innerHTML='<details class="prog"><summary>📈 Weeks 5–13 · Load targets</summary>'+
+  '<p class="mut" style="font-size:12.5px;margin:8px 0 10px">~2-month block. <b style="color:var(--ink)">Add load</b> on Wk 7 & Wk 11, <b style="color:var(--ink)">rep-peak</b> Wk 12, <b style="color:var(--ink)">deload</b> on Wk 8 & Wk 13. Rule: top of the rep range on all sets at target RIR → add the small load, restart at the bottom.</p>'+
+  '<div class="prog-twrap"><table class="prog-t"><thead><tr><th>Lift</th><th>Reps</th><th>Wk 5</th><th>Peak</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
   '<p class="mut" style="font-size:12px;margin-top:10px">Pull-ups & dips: cut the assistance each load week → your first unassisted rep. Bench/press & everything else: add reps first, then a small load. Clear the big jumps (e.g. 100 kg hip thrust) with your knee clinician.</p>'+
   '</details>';
+}
+
+/* ===== EXACT weekly progression (Wk 5–13) =====
+   App week 1..9 = journey Wk 5..13. Each lift has a load for every week;
+   deload weeks carry the reduced load, and the action tells add-weight vs add-reps. */
+const WEEK_ACTION=[
+ {tag:'Establish',txt:'bottom of the range · ~2 RIR'},
+ {tag:'+ reps',txt:'same weight · add 1–2 reps per set'},
+ {tag:'+ weight',txt:'restart at the bottom of the range'},
+ {tag:'DELOAD',txt:'go light · 3+ RIR, easy',deload:true},
+ {tag:'Settle',txt:'heavier load · ~2 RIR'},
+ {tag:'+ reps',txt:'same weight · add 1–2 reps per set'},
+ {tag:'+ weight',txt:'push toward your peak · restart at the bottom'},
+ {tag:'+ reps',txt:'peak load · squeeze every rep at the top'},
+ {tag:'DELOAD',txt:'go light · 3+ RIR · then check-in',deload:true}
+];
+// build the 9-week load array: [Wk5,6,7,8(deload),9,10,11,12,13(deload)]
+const mk=(s,i,d1,d2)=>[s,s,s+i,d1,s+i,s+i,s+2*i,s+2*i,d2];
+const WPROG={
+ ht_heavy:mk(100,5,70,75), rdl:mk(47.5,2.5,35,37.5), legpress:mk(90,7.5,65,72.5),
+ shc:mk(55,2.5,40,42.5), backext:mk(25,2.5,17.5,20), calf:mk(12.5,2.5,10,12.5),
+ bench:mk(17.5,2.5,12.5,15), row:mk(55,2.5,40,42.5), ohp:mk(17.5,2.5,12.5,15),
+ latr:mk(6,1,5,5), slht:mk(25,2.5,17.5,20), dbrdl:mk(25,2.5,17.5,20),
+ stepup:mk(12.5,2.5,10,12.5), lhc:mk(19,2.5,14,16), abd:mk(80,5,55,60),
+ lpd:mk(55,5,37.5,42.5), csr:mk(55,2.5,40,42.5), facepull:mk(17.5,2.5,12.5,15),
+ curl:[12.5,12.5,15,10,15,15,15,15,10], tri:[12.5,12.5,15,10,15,15,15,15,10],
+ ht_light:mk(62.5,2.5,45,47.5), incpress:mk(14,2,10,12), kick:mk(12.5,2.5,10,12.5)
+};
+// bodyweight / skill lifts progress by reps, time, or assistance
+const WBW={apu:'assist',dip:'assist',hang:'time',hollow:'time',plank:'time',
+ pushup:'reps',scap:'reps',hkr:'reps',frog:'reps',crunch:'reps',negpu:'reps'};
+function bwText(type,act){
+ if(act.deload)return type==='time'?'shorter, easy holds':type==='assist'?'more assistance · keep it easy':'fewer reps · leave 3+ in reserve';
+ if(act.tag==='Establish')return type==='time'?'find a solid hold time':type==='assist'?'clean reps at your current assistance':'clean reps · ~2 in reserve';
+ return type==='time'?'add 3–5 s to your holds':type==='assist'?'drop the assistance a notch':'add 1–2 reps per set';
+}
+// the target line shown on each exercise in the daily session
+function weekTargetHTML(ex,rehab,logs){
+ if(rehab||ex.id==='cardio')return '';
+ const wk=store.get('week',1),act=WEEK_ACTION[wk-1]||WEEK_ACTION[0],jw=wk+4;
+ const cls='wk-target'+(act.deload?' deload':'');
+ if(WPROG[ex.id]){
+  const load=WPROG[ex.id][wk-1];
+  const last=logs&&logs[ex.id]&&logs[ex.id].w;
+  let delta='';
+  if(last!=null){const d=Math.round((load-last)*10)/10;delta=d>0?' <span class="up">(+'+d+' kg)</span>':d<0?' <span class="dn">('+d+' kg)</span>':' <span class="dn">(same)</span>';}
+  const setsNote=act.deload?' · '+Math.max(1,Math.round(ex.s/2))+' sets only':'';
+  return '<div class="'+cls+'"><b class="t">Wk '+jw+' · '+act.tag+'</b> → <b class="l">'+load+' kg</b>'+delta+setsNote+' · '+act.txt+'</div>';
+ }
+ return '<div class="'+cls+'"><b class="t">Wk '+jw+' · '+act.tag+'</b> → '+bwText(WBW[ex.id]||'reps',act)+'</div>';
 }
 // grp = swap group key
 const SESSIONS={
@@ -1008,7 +1067,7 @@ function renderWave(){
  $('#waveTitle').textContent=WEEKS[w-1].t;
  $('#waveRule').textContent=WEEKS[w-1].r;
 }
-$('#waveNext').addEventListener('click',()=>{const w=store.get('week',1)%WEEKS.length+1;store.set('week',w);renderWave();renderToday();toast(WEEKS[w-1].deload?'Deload week — recover, you keep your gains':'Now on '+WEEKS[w-1].t);});
+$('#waveNext').addEventListener('click',()=>{const w=store.get('week',1)%WEEKS.length+1;store.set('week',w);renderWave();renderToday();renderSession();toast(WEEKS[w-1].deload?'Deload week — recover, you keep your gains':'Now on '+WEEKS[w-1].t);});
 $('#dateChip').textContent=new Date().toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
 
 /* ===== nav ===== */
@@ -1074,18 +1133,20 @@ function renderSession(){
  const s=SESSIONS[selDay];
  $('#sessTitle').textContent=s.name;$('#sessMeta').textContent=s.meta;$('#sessNote').textContent=s.note;
  const list=$('#exList');list.innerHTML='';
- const checks=store.get(checksKey(),{}),logs=store.get('logs',{}),sw=store.get('swaps',{});
+ const checks=store.get(checksKey(),{}),logs=store.get('logs',{}),sw=store.get('swaps',{}),wk=store.get('week',1);
  s.ex.forEach(ex=>{
   const div=document.createElement('div');div.className='ex'+(s.rehab?' rehab-ex':'');
   let dots='',allOn=true;
-  for(let i=0;i<ex.s;i++){const on=!!checks[selDay+'_'+ex.id+'_'+i];if(!on)allOn=false;dots+='<button class="set-dot'+(on?' on':'')+'" data-ex="'+ex.id+'" data-i="'+i+'" aria-label="Set '+(i+1)+'">'+(i+1)+'</button>';}
+  const deloadWk=!s.rehab&&(WEEK_ACTION[wk-1]||{}).deload;
+  const nSets=deloadWk?Math.max(1,Math.round(ex.s/2)):ex.s;
+  for(let i=0;i<nSets;i++){const on=!!checks[selDay+'_'+ex.id+'_'+i];if(!on)allOn=false;dots+='<button class="set-dot'+(on?' on':'')+'" data-ex="'+ex.id+'" data-i="'+i+'" aria-label="Set '+(i+1)+'">'+(i+1)+'</button>';}
   if(allOn)div.classList.add('done');
   let logHtml='';
-  if(ex.log){const last=logs[ex.id];logHtml='<div class="logrow"><input type="number" inputmode="decimal" step="0.5" placeholder="kg" aria-label="Weight" data-w="'+ex.id+'"><span class="x">×</span><input type="number" inputmode="numeric" placeholder="reps" aria-label="Reps" data-r="'+ex.id+'"><button class="save-log" data-save="'+ex.id+'">Log</button></div>'+(last?'<div class="lastlog">Last: <b>'+last.w+' kg × '+last.r+'</b> · '+fmtD(last.d)+'</div>':'<div class="lastlog">No log yet — save your top set</div>');}
+  if(ex.log){const last=logs[ex.id];const pw=(!s.rehab&&WPROG[ex.id])?WPROG[ex.id][wk-1]:'';const rm=String(ex.r).match(/\d+/);const pr=(!s.rehab&&WPROG[ex.id]&&rm)?rm[0]:'';logHtml='<div class="logrow"><input type="number" inputmode="decimal" step="0.5" placeholder="kg" aria-label="Weight" data-w="'+ex.id+'" value="'+pw+'"><span class="x">×</span><input type="number" inputmode="numeric" placeholder="reps" aria-label="Reps" data-r="'+ex.id+'" value="'+pr+'"><button class="save-log" data-save="'+ex.id+'">Log</button></div>'+(pw!==''?'<div class="lastlog">Target pre-filled — edit if it\'s too light/heavy, then Log'+(last?' · last: <b>'+last.w+' kg × '+last.r+'</b>':'')+'</div>':(last?'<div class="lastlog">Last: <b>'+last.w+' kg × '+last.r+'</b> · '+fmtD(last.d)+'</div>':'<div class="lastlog">No log yet — save your top set</div>'));}
   const swapped=sw[ex.id];
   const swapChip=swapped?'<div class="swapped-chip" data-reset="'+ex.id+'">⇄ swapped · tap to reset</div>':'';
   const swapBtn=ex.grp?'<button class="swapbtn" data-swap="'+ex.id+'" aria-label="Swap exercise"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4l-4 4 4 4M3 8h13M17 20l4-4-4-4M21 16H8"/></svg></button>':'';
-  div.innerHTML='<div class="ex-top"><div style="flex:1;min-width:0"><div class="ex-name">'+activeName(ex)+'</div><div class="ex-scheme">'+ex.s+' × '+ex.r+(ex.rir!=='—'?' · RIR '+ex.rir:'')+'</div>'+swapChip+'</div>'+swapBtn+'</div>'+(ex.c?'<div class="ex-cue">'+ex.c+'</div>':'')+'<div class="sets">'+dots+'</div>'+logHtml;
+  div.innerHTML='<div class="ex-top"><div style="flex:1;min-width:0"><div class="ex-name">'+activeName(ex)+'</div><div class="ex-scheme">'+nSets+' × '+ex.r+(ex.rir!=='—'?' · RIR '+ex.rir:'')+(deloadWk?' · deload':'')+'</div>'+swapChip+'</div>'+swapBtn+'</div>'+(ex.c?'<div class="ex-cue">'+ex.c+'</div>':'')+weekTargetHTML(ex,s.rehab,logs)+'<div class="sets">'+dots+'</div>'+logHtml;
   list.appendChild(div);
  });
  list.querySelectorAll('.set-dot').forEach(d=>d.addEventListener('click',()=>{const c=store.get(checksKey(),{});const k=selDay+'_'+d.dataset.ex+'_'+d.dataset.i;c[k]=!c[k];store.set(checksKey(),c);renderSession();}));
@@ -1491,8 +1552,11 @@ $('#mSave').addEventListener('click',()=>{const w=$('#mWaist').value,h=$('#mHip'
 /* ===== lock zoom (iOS ignores user-scalable=no; touch-action covers the rest) ===== */
 ['gesturestart','gesturechange','gestureend'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),{passive:false}));
 
-/* ===== new-block migration: start the weeks 5–12 block at Wk 5 (once) ===== */
-if(store.get('block')!=='w5-12'){store.set('week',1);store.set('block','w5-12');}
+/* ===== new-block migration: start the weeks 5–13 block at Wk 5 (once) ===== */
+if(store.get('block')!=='w5-13'){store.set('week',1);store.set('block','w5-13');}
+
+/* ===== ask the browser to keep this data (don't evict under storage pressure) ===== */
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();}catch(e){}
 
 /* ===== init ===== */
 renderProg();
